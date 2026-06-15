@@ -1,0 +1,25 @@
+{
+  "name": "crm-revenue-ops-agent-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-shaped RevOps agent workflow for CRM pipeline automation, approval-gated actions, and audit-safe next actions.",
+  "workspaces": [
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "check": "npm run lint && npm run test:node && npm run test:python && npm run security:scan && npm run audit:deps && npm run build && npm run compose:check",
+    "lint": "node tools/lint-repo.mjs",
+    "test": "npm run test:node && npm run test:python",
+    "test:node": "node --test apps/web/tests/*.test.mjs",
+    "test:python": "node tools/run-python-tests.mjs",
+    "security:scan": "node tools/security-check.mjs",
+    "audit:deps": "npm audit --audit-level=moderate",
+    "build": "npm --workspace apps/web run build",
+    "compose:check": "node tools/compose-check.mjs",
+    "dev": "npm --workspace apps/web run dev"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

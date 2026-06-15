@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: revops
+      POSTGRES_PASSWORD: revops
+      POSTGRES_DB: revops
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U revops -d revops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    image: node:22-alpine
+    working_dir: /workspace
+    command: sh -c "npm install && npm --workspace apps/web run dev"
+    volumes:
+      - ./:/workspace
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://revops:revops@postgres:5432/revops
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  engine:
+    image: python:3.12-alpine
+    working_dir: /workspace/services/engine
+    command: python -m revops_engine.worker
+    volumes:
+      - ./:/workspace
+    environment:
+      DATABASE_URL: postgresql://revops:revops@postgres:5432/revops
+      REDIS_URL: redis://redis:6379
+      CRM_EVENT_STREAM: crm.events
+      CRM_EVENT_DLQ_STREAM: crm.events.dead_letter
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

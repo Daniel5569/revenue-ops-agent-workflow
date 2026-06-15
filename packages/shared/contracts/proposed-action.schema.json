@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/contracts/proposed-action.schema.json",
+  "title": "ProposedAction",
+  "type": "object",
+  "required": [
+    "id",
+    "actionType",
+    "targetType",
+    "targetId",
+    "reasonCode",
+    "confidence",
+    "status",
+    "policyDecision",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string" },
+    "actionType": { "type": "string" },
+    "targetType": { "type": "string" },
+    "targetId": { "type": "string" },
+    "reasonCode": { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected", "blocked", "auto_safe"]
+    },
+    "policyDecision": {
+      "type": "string",
+      "enum": ["auto_safe", "requires_approval", "blocked"]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
