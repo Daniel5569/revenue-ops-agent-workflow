@@ -1,77 +1,190 @@
 # CRM Revenue Ops Agent Workflow
 
-Production-shaped RevOps agent for CRM pipeline automation, lead routing, approval workflows, and audit-safe next actions.
+Policy-gated CRM automation that validates, scores, and routes revenue events to human-approved proposed actions — with a complete audit trail and no destructive writes without explicit sign-off.
 
-This repository demonstrates the operational control plane around AI-assisted revenue workflows. A Next.js gateway accepts CRM-style events, validates and persists them, queues work asynchronously, and a Python engine scores records, evaluates policy, proposes next actions, and writes audit events. External CRM and email integrations are intentionally mocked and deterministic.
+A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine scores each record and classifies the required action by risk tier, and every proposal that touches ownership, stage, or forecast waits in an approval queue before anything changes.
 
-## What this shows
+- **Idempotency at intake**: SHA-256 content hashing on the canonical event body means duplicate CRM webhooks are safe to replay — no double-processing, no silent data corruption
+- **Three-tier policy enforcement**: `auto_safe`, `requires_approval`, and `blocked` are evaluated at the worker layer, not the dashboard — there is no UI path that bypasses policy
+- **Immutable audit trail**: every state transition (event accepted, proposal created, approved, rejected) is written before the response returns
 
-- CRM event intake with validation and idempotency.
-- Redis Streams-style async queue boundary with dead-letter and stale pending recovery concepts.
-- Deterministic lead/opportunity scoring without paid API keys.
-- Policy-gated actions where risky updates require approval.
-- Human approval/rejection flow with audit events.
-- RevOps dashboard shaped like an internal console, not a landing page.
-- Local test and security checks with one root command.
+---
 
-## Architecture
+## Quick Start
 
-```mermaid
-flowchart LR
-  CRM[CRM, Slack, or email event] --> API[Next.js API gateway]
-  API --> DB[(PostgreSQL)]
-  API --> STREAM[Redis Stream]
-  STREAM --> WORKER[Python RevOps engine]
-  WORKER --> POLICY[Policy evaluator]
-  POLICY --> PROPOSAL[Proposed action]
-  PROPOSAL --> DB
-  DB --> DASH[Approval dashboard]
-  DASH --> APPROVE[Approve or reject]
-  APPROVE --> AUDIT[Audit timeline]
-  AUDIT --> DB
-```
+### Prerequisites
 
-## Runtime boundaries
+- Node.js 20+
+- Python 3.12+
+- Docker (for the full local stack with Postgres and Redis)
 
-- `apps/web`: Next.js dashboard and API route skeletons for event intake, proposal lookup, and approval decisions.
-- `services/engine`: Python scoring, policy, and worker logic.
-- `packages/shared`: JSON contracts for event and proposed-action payloads.
-- `infra/db`: PostgreSQL schema and seed data.
-- `tools`: local checks for repository shape, security hygiene, Docker Compose, and Python test execution.
-
-## Quick start
+### Setup
 
 ```bash
-npm run check
-docker compose config --quiet
-```
-
-To run the web app after installing dependencies:
-
-```bash
+git clone https://github.com/Daniel5569/revenue-ops-agent-workflow.git
+cd crm-revenue-ops-agent-workflow
 npm install
+cp .env.example .env
 npm run dev
 ```
 
-The local stack is declared in `docker-compose.yml`. The Compose config check does not require secrets.
+The dashboard is available at `http://localhost:3000`.
 
-Note: the web workspace pins `next@16.3.0-canary.49` because the current stable Next release depends on a PostCSS version flagged by `npm audit`. This can be moved back to a stable Next release once stable carries PostCSS `8.5.10` or newer.
+To start the complete local stack (Postgres + Redis + web app + Python engine):
 
-## Example event
+```bash
+docker compose up
+```
+
+Run all checks (lint, tests, security scan, build, Compose validation) in one command:
+
+```bash
+npm run check
+```
+
+### Expected output
+
+```
+✓ Compiled successfully
+✓ Ready on http://localhost:3000
+```
+
+A valid event submission returns `202 Accepted`:
+
+```json
+{
+  "id": "c7e2a1f0-3b44-4d9e-8c12-ff2091a3d84e",
+  "idempotencyKey": "7f4a2c9d1e83b05a...",
+  "jobId": "job_1",
+  "proposalId": "proposal_7f4a2c9d1e83"
+}
+```
+
+---
+
+## Architecture
+
+```
+CRM webhook / Slack / email event
+            │
+            ▼
+ ┌──────────────────────┐
+ │   Next.js gateway    │  validate → idempotency check → enqueue
+ │   (apps/web)         │
+ └──────┬───────────────┘
+        │                 ┌─────────────────────┐
+        ├────────────────▶│    PostgreSQL        │
+        │                 │  events, proposals,  │
+        │                 │  audit log           │
+        │                 └─────────────────────┘
+        ▼
+ ┌──────────────────────┐
+ │    Redis Stream      │  async queue boundary
+ └──────┬───────────────┘
+        │
+        ▼
+ ┌──────────────────────┐
+ │   Python worker      │
+ │   ┌────────────────┐ │
+ │   │ Scorer         │ │  segment, seniority, signals, staleness
+ │   │ Policy engine  │ │  auto_safe / requires_approval / blocked
+ │   │ Proposal gen   │ │  confidence score, reason code, target
+ │   └────────────────┘ │
+ └──────┬───────────────┘
+        │
+        ▼
+ ┌──────────────────────┐        ┌──────────────────┐
+ │   Approval queue     │───────▶│  Reviewer        │
+ │   (pending proposals)│        │  approve/reject  │
+ └──────────────────────┘        └────────┬─────────┘
+                                           │
+                                           ▼
+                                    Audit event written
+```
+
+### Stack
+
+| Layer | Technology |
+|---|---|
+| API gateway + dashboard | Next.js 16, React 19, TypeScript |
+| Worker + policy engine | Python 3.12 (stdlib only, no external deps) |
+| Storage | PostgreSQL 16 |
+| Queue | Redis 7 (Streams model) |
+| Shared contracts | JSON Schema |
+| Local stack | Docker Compose |
+| CI | GitHub Actions |
+
+---
+
+## Key Features
+
+**Content-addressed idempotency**
+The idempotency key is a SHA-256 hash of the canonical event body — `source`, `externalRef`, `eventType`, and `payload` with object keys sorted. Repeated CRM webhooks for the same event produce the exact same key, so duplicates are caught at storage write time without any external state or locking.
+
+**Three-tier policy engine**
+Actions are classified as `auto_safe` (create internal task, add note), `requires_approval` (reassign owner, move opportunity stage, change forecast amount, merge contact), or `blocked` (send external email, delete CRM record, overwrite a closed status). Classification runs in the Python worker — the API routes have no override path.
+
+**Dead-letter routing**
+Events that fail validation or trigger an enqueue error are written to a dead-letter queue with a structured reason code rather than dropped silently. The DLQ is a first-class entity, not a log line.
+
+**Stale pending recovery**
+Worker jobs that exceed an idle threshold are reclaimed and reprocessed. The reclaim logic is deterministic and idempotent — replaying a stale job produces the same proposal as the original run.
+
+**Approval-gated writes with pre-write audit**
+Proposals awaiting human review expose `POST /approve` and `POST /reject` endpoints. Each decision is appended to the audit log before the updated proposal is returned — there is no way to record an approval without the audit entry being written first.
+
+**Deterministic scoring without external services**
+Lead scoring applies explicit rule weights: target segment match, buyer seniority tier, intent signals (pricing page, product docs), and opportunity staleness. No LLM calls, no third-party enrichment APIs, no rate limits. Every score is reproducible from the event payload alone, which makes tests fast and CI cheap.
+
+---
+
+## Project Structure
+
+```
+.
+├── apps/web/                    # Next.js dashboard and API routes
+│   ├── src/app/api/
+│   │   ├── crm/events/          # POST: validate, deduplicate, enqueue
+│   │   └── proposals/[id]/      # GET: fetch proposal
+│   │       ├── approve/         # POST: approve with reviewer + reason
+│   │       └── reject/          # POST: reject with reviewer + reason
+│   ├── src/lib/                 # idempotency, validation, policy, store, queue
+│   └── tests/                   # Node test runner (4 integration tests)
+├── services/engine/             # Python RevOps engine
+│   ├── revops_engine/
+│   │   ├── scorer.py            # Rule-based lead scoring
+│   │   ├── policy.py            # Action classification (auto/approval/blocked)
+│   │   └── worker.py            # Event processing, proposal gen, dead-letter
+│   └── tests/                   # unittest suite (8 tests)
+├── packages/shared/
+│   └── contracts/               # JSON Schema for CRM events and proposed actions
+├── infra/db/
+│   └── init.sql                 # PostgreSQL schema: events, proposals, audit log
+├── tools/                       # lint-repo, security-check, compose-check, python runner
+├── .github/workflows/ci.yml     # CI: lint → test → security → build
+├── docker-compose.yml           # Postgres 16, Redis 7, web, Python engine
+└── .env.example                 # Environment variable reference
+```
+
+---
+
+## API / Usage
+
+### Submit a CRM event
 
 ```bash
 curl -X POST http://localhost:3000/api/crm/events \
   -H "Content-Type: application/json" \
   -d '{
     "source": "hubspot-demo",
-    "externalRef": "lead_1001",
+    "externalRef": "lead_4471",
     "eventType": "lead.created",
-    "occurredAt": "2026-06-12T09:30:00Z",
+    "occurredAt": "2025-11-03T14:22:00Z",
     "payload": {
-      "accountName": "Northstar Analytics",
-      "domain": "northstar.example",
+      "accountName": "Meridian Cloud",
+      "domain": "meridiancloud.io",
       "segment": "b2b_saas",
-      "employeeCount": 180,
+      "employeeCount": 240,
       "seniority": "vp",
       "signals": ["pricing_page", "product_docs"],
       "consentStatus": "opted_in"
@@ -79,35 +192,62 @@ curl -X POST http://localhost:3000/api/crm/events \
   }'
 ```
 
-The endpoint returns `202 Accepted` after validation and idempotency calculation. In this portfolio implementation the adapters are deterministic and safe by default.
+**Response — `202 Accepted`:**
 
-## Policy examples
-
-- Auto-safe: create an internal follow-up task for an owner.
-- Requires approval: draft outbound email, move opportunity to commit, reassign owner, change forecast amount.
-- Blocked: send external email, delete CRM record, overwrite closed-won/closed-lost, or update records without an idempotency key.
-
-## Test commands
-
-```bash
-npm run lint
-npm run test:node
-npm run test:python
-npm run security:scan
-npm run audit:deps
-npm run build
-npm run compose:check
-npm run check
+```json
+{
+  "id": "c7e2a1f0-3b44-4d9e-8c12-ff2091a3d84e",
+  "idempotencyKey": "7f4a2c9d1e83b05a...",
+  "jobId": "job_3",
+  "proposalId": "proposal_7f4a2c9d1e83"
+}
 ```
 
-## Security posture
+Submitting the same payload a second time returns `202` with `"duplicate": true` — no second proposal is created, no CRM state changes.
 
-- No real CRM credentials, API keys, email provider credentials, or customer data are committed.
-- `.env.example` is safe to publish; `.env` and `.env.*` are ignored.
-- External sends and destructive CRM changes are blocked in policy.
-- Risky internal CRM changes require explicit approval.
-- Audit events are written for event intake, proposal creation, and approval transitions.
+---
 
-## Trade-offs
+### Approve a proposal
 
-This repo prioritizes credible architecture and local reviewability over third-party integrations. Salesforce, HubSpot, Slack, and email providers are represented by deterministic contracts and adapters so the repo can be published safely without secrets or external accounts.
+```bash
+curl -X POST http://localhost:3000/api/proposals/proposal_7f4a2c9d1e83/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reviewer": "ops-lead@company.internal",
+    "reason": "Confirmed VP-level inbound from target segment — assign to AE immediately"
+  }'
+```
+
+**Response — `200 OK`:**
+
+```json
+{
+  "id": "proposal_7f4a2c9d1e83",
+  "actionType": "reassign_owner",
+  "status": "approved",
+  "policyDecision": "requires_approval",
+  "reasonCode": "HOT_INBOUND_SLA",
+  "confidence": 0.91
+}
+```
+
+---
+
+## Configuration
+
+| Variable | Description | Example | Required |
+|---|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/revops` | Yes |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6379` | Yes |
+| `CRM_EVENT_STREAM` | Redis stream key for incoming events | `crm.events` | Yes |
+| `CRM_EVENT_DLQ_STREAM` | Redis stream key for dead-letter events | `crm.events.dead_letter` | Yes |
+| `APPROVAL_REVIEWER` | Default reviewer identity when none is supplied | `ops@company.internal` | No |
+| `NEXT_PUBLIC_APP_NAME` | Dashboard title rendered in the browser | `CRM Revenue Ops Agent Workflow` | No |
+
+Copy `.env.example` to `.env` for local development. The `.env` file is gitignored and must never be committed.
+
+---
+
+## Why This Project Matters
+
+Revenue operations teams at B2B SaaS companies lose pipeline to two failure modes: slow reaction to high-intent signals, and accidental destructive CRM writes — overwritten owners, duplicate leads, premature stage moves — that corrupt forecasts and erode rep trust in the system. Most automation tools address one or the other. This system treats CRM automation as a control problem: every proposed action is scored, classified by risk, and either executed automatically or held for human review, with every state transition logged before it is acknowledged. The architecture maps directly to what a production RevOps platform requires — an idempotent intake layer, a stateless policy engine that can be tested without infrastructure, and an approval queue where the human decision is the authoritative event, not an afterthought.
