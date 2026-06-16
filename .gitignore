@@ -29,3 +29,11 @@ apps/web/next-env.d.ts
 *.db
 
 security-scans/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+pyrightconfig.json

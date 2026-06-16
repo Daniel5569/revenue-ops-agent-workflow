@@ -38,7 +38,7 @@ Primary risks for this repo are:
 The following command passed locally:
 
 ```bash
-npm.cmd run check
+npm run check
 ```
 
 It executed:
