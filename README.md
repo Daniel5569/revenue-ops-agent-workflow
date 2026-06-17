@@ -1,6 +1,8 @@
 # CRM Revenue Ops Agent Workflow
 
-Policy-gated CRM automation that validates, scores, and routes revenue events to human-approved proposed actions — with a complete audit trail and no destructive writes without explicit sign-off.
+[![CI](https://github.com/Daniel5569/revenue-ops-agent-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Daniel5569/revenue-ops-agent-workflow/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Node.js ≥20](https://img.shields.io/badge/node-%E2%89%A520-brightgreen)](https://nodejs.org/) [![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://python.org/) [![12 tests passing](https://img.shields.io/badge/tests-12%20passing-brightgreen)](.github/workflows/ci.yml)
+
+B2B SaaS revenue teams lose pipeline to two failure modes: **slow reaction to high-intent signals** and **accidental destructive CRM writes** — overwritten owners, premature stage moves, duplicate leads — that corrupt forecasts and break rep trust. This system treats CRM automation as a control problem: every proposed action is scored, classified by risk, and either executed automatically or held for human review, with every state transition logged before it is acknowledged.
 
 A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine scores each record and classifies the required action by risk tier, and every proposal that touches ownership, stage, or forecast waits in an approval queue before anything changes.
 
@@ -277,3 +279,31 @@ Revenue operations teams at B2B SaaS companies lose pipeline to two failure mode
 - **Approval-queue patterns** — proposals are first-class persistent entities, not ephemeral side effects; every approval and rejection is an event appended to the audit log, not a field update on an existing row
 - **Audit-first state transitions** — the audit record is written before the response is returned; there is no code path that completes a state change without the corresponding audit event being committed first
 - **Monorepo with mixed Node.js + Python stack** — npm workspaces (Next.js API gateway, shared JSON Schema contracts) alongside a standalone Python worker that shares the same event contracts and policy logic, with separate test suites for each layer verified independently in CI
+
+---
+
+## Startup Use Cases
+
+### Seed stage — small team, high CRM risk
+
+You have 2–4 AEs and one RevOps generalist. Manual review of every lead assignment isn't possible, but one wrong auto-reassignment can tank a deal. This system's `auto_safe` tier handles low-risk operations (create task, add note) without touching ownership. Anything that moves a deal stage or changes a rep assignment goes to the queue — the human decision is one click, not a Slack thread.
+
+### Series A — scaling webhook volume from HubSpot / Salesforce integrations
+
+Form submissions, list imports, Zapier pipelines, and enrichment tools all generate duplicate CRM records. Content-addressed idempotency catches duplicates before they create RevOps cleanup work. A single `externalRef` + canonical payload hash is enough — no external deduplication service, no locking, no race conditions.
+
+### Pre-SOC 2 / First compliance audit
+
+Auditors ask "who approved moving that deal?" and most CRMs answer with a vague activity log or nothing. Here every approval and rejection is an immutable audit event written before the response returns. The answer is a single query with a timestamp, reviewer identity, and stated reason — no reconstruction needed.
+
+### Outbound-heavy — Outreach / Apollo + CRM sync
+
+External email sends and closed-status overwrites are `blocked` by default. No Zapier rule, no misconfigured workflow, no "I thought the automation handled it" can bypass the policy layer — because classification runs in the worker, not the UI.
+
+---
+
+## About the Author
+
+Built by **[Daniel Ciafro](https://github.com/Daniel5569)** — software engineer focused on revenue operations infrastructure and B2B SaaS backend systems. The design reflects patterns from production RevOps environments: idempotent intake, policy-enforced automation, and approval workflows that keep humans in the loop on high-risk CRM changes.
+
+Open to **founding engineer and senior backend roles** at growth-stage B2B SaaS companies in the US.
