@@ -1,5 +1,5 @@
 {
-  "name": "@crm-revenue-ops-agent-workflow/web",
+  "name": "@revenue-ops-agent-workflow/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",

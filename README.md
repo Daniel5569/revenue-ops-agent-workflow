@@ -22,7 +22,7 @@ A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine 
 
 ```bash
 git clone https://github.com/Daniel5569/revenue-ops-agent-workflow.git
-cd crm-revenue-ops-agent-workflow
+cd revenue-ops-agent-workflow
 npm install
 cp .env.example .env
 npm run dev
@@ -148,7 +148,7 @@ Lead scoring applies explicit rule weights: target segment match, buyer seniorit
 │   │   └── proposals/[id]/      # GET: fetch proposal
 │   │       ├── approve/         # POST: approve with reviewer + reason
 │   │       └── reject/          # POST: reject with reviewer + reason
-│   ├── src/lib/                 # idempotency, validation, policy, store, queue
+│   ├── src/lib/                 # idempotency, validation, policy, proposals, store, queue, sample-data
 │   └── tests/                   # Node test runner (4 integration tests)
 ├── services/engine/             # Python RevOps engine
 │   ├── revops_engine/

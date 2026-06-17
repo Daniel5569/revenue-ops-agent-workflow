@@ -1,5 +1,5 @@
 {
-  "name": "crm-revenue-ops-agent-workflow",
+  "name": "revenue-ops-agent-workflow",
   "version": "0.1.0",
   "private": true,
   "description": "Production-shaped RevOps agent workflow for CRM pipeline automation, approval-gated actions, and audit-safe next actions.",
