@@ -8,7 +8,7 @@ A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine 
 - **Three-tier policy enforcement**: `auto_safe`, `requires_approval`, and `blocked` are evaluated at the worker layer, not the dashboard — there is no UI path that bypasses policy
 - **Immutable audit trail**: every state transition (event accepted, proposal created, approved, rejected) is written before the response returns
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Daniel5569/revenue-ops-agent-workflow&root-directory=apps/web)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Daniel5569/revenue-ops-agent-workflow&root-directory=apps/web) &nbsp; **[Live Demo →](https://revenue-ops-agent-workflow-web.vercel.app)**
 
 ![Dashboard — proposal queue, detail panel, and audit trail](docs/screenshot.png)
 
