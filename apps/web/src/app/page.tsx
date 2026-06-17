@@ -15,7 +15,7 @@ export default function DashboardPage() {
         <div className="brand">
           <div className="mark">RO</div>
           <div>
-            <h1>CRM Revenue Ops Agent Workflow</h1>
+            <h1>{process.env.NEXT_PUBLIC_APP_NAME ?? "CRM Revenue Ops Agent Workflow"}</h1>
             <p>Policy-gated CRM next actions with audit-safe approvals</p>
           </div>
         </div>

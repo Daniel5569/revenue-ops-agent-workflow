@@ -45,7 +45,7 @@ npm run check
 ### Expected output
 
 ```
-✓ Compiled successfully
+▲ Next.js 16.3.0-canary.49 (webpack)
 ✓ Ready on http://localhost:3000
 ```
 
@@ -65,7 +65,7 @@ A valid event submission returns `202 Accepted`:
 ## Architecture
 
 ```
-CRM webhook / Slack / email event
+CRM webhook event
             │
             ▼
  ┌──────────────────────┐
@@ -101,6 +101,8 @@ CRM webhook / Slack / email event
                                            ▼
                                     Audit event written
 ```
+
+**Implementation note:** The Node.js layer uses in-memory storage (`store.mjs`, `queue.mjs`) so the repo runs without external services after `npm install`. The `infra/db/init.sql` schema and Docker Compose file describe the production topology where state is persisted to PostgreSQL and events are queued through Redis Streams.
 
 ### Stack
 
@@ -161,8 +163,11 @@ Lead scoring applies explicit rule weights: target segment match, buyer seniorit
 ├── infra/db/
 │   └── init.sql                 # PostgreSQL schema: events, proposals, audit log
 ├── tools/                       # lint-repo, security-check, compose-check, python runner
+├── docs/
+│   └── SECURITY_REVIEW.md       # Pre-publication security review
 ├── .github/workflows/ci.yml     # CI: lint → test → security → build
 ├── docker-compose.yml           # Postgres 16, Redis 7, web, Python engine
+├── LICENSE                      # MIT
 └── .env.example                 # Environment variable reference
 ```
 
@@ -224,10 +229,17 @@ curl -X POST http://localhost:3000/api/proposals/proposal_7f4a2c9d1e83/approve \
 {
   "id": "proposal_7f4a2c9d1e83",
   "actionType": "reassign_owner",
+  "targetType": "lead",
+  "targetId": "meridiancloud.io",
+  "reasonCode": "HOT_INBOUND_SLA",
+  "confidence": 0.98,
   "status": "approved",
   "policyDecision": "requires_approval",
-  "reasonCode": "HOT_INBOUND_SLA",
-  "confidence": 0.91
+  "payload": {
+    "accountName": "Meridian Cloud",
+    "evidence": ["Segment: b2b_saas", "Buyer seniority: vp", "Signals: pricing_page, product_docs"],
+    "policyReasonCode": "HUMAN_APPROVAL_REQUIRED"
+  }
 }
 ```
 
@@ -237,12 +249,14 @@ curl -X POST http://localhost:3000/api/proposals/proposal_7f4a2c9d1e83/approve \
 
 | Variable | Description | Example | Required |
 |---|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/revops` | Yes |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` | Yes |
-| `CRM_EVENT_STREAM` | Redis stream key for incoming events | `crm.events` | Yes |
-| `CRM_EVENT_DLQ_STREAM` | Redis stream key for dead-letter events | `crm.events.dead_letter` | Yes |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/revops` | Production |
+| `REDIS_URL` | Redis connection string | `redis://localhost:6379` | Production |
+| `CRM_EVENT_STREAM` | Redis stream key for incoming events | `crm.events` | Production |
+| `CRM_EVENT_DLQ_STREAM` | Redis stream key for dead-letter events | `crm.events.dead_letter` | Production |
 | `APPROVAL_REVIEWER` | Default reviewer identity when none is supplied | `ops@company.internal` | No |
 | `NEXT_PUBLIC_APP_NAME` | Dashboard title rendered in the browser | `CRM Revenue Ops Agent Workflow` | No |
+
+`DATABASE_URL`, `REDIS_URL`, `CRM_EVENT_STREAM`, and `CRM_EVENT_DLQ_STREAM` are required when running the full Docker Compose stack. The in-memory demo (`npm install && npm run dev`) runs without them.
 
 Copy `.env.example` to `.env` for local development. The `.env` file is gitignored and must never be committed.
 
