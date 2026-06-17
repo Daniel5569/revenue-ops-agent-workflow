@@ -304,6 +304,8 @@ External email sends and closed-status overwrites are `blocked` by default. No Z
 
 ## About the Author
 
-Built by **[Daniel Ciafro](https://github.com/Daniel5569)** — software engineer focused on revenue operations infrastructure and B2B SaaS backend systems. The design reflects patterns from production RevOps environments: idempotent intake, policy-enforced automation, and approval workflows that keep humans in the loop on high-risk CRM changes.
+Built by **[Daniel Ciafro](https://www.linkedin.com/in/daniel-ciafro--growth-strategy/)** — software engineer focused on revenue operations infrastructure and B2B SaaS backend systems. The design reflects patterns from production RevOps environments: idempotent intake, policy-enforced automation, and approval workflows that keep humans in the loop on high-risk CRM changes.
 
 Open to **founding engineer and senior backend roles** at growth-stage B2B SaaS companies in the US.
+
+[LinkedIn](https://www.linkedin.com/in/daniel-ciafro--growth-strategy/) · [GitHub](https://github.com/Daniel5569)
