@@ -8,6 +8,10 @@ A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine 
 - **Three-tier policy enforcement**: `auto_safe`, `requires_approval`, and `blocked` are evaluated at the worker layer, not the dashboard — there is no UI path that bypasses policy
 - **Immutable audit trail**: every state transition (event accepted, proposal created, approved, rejected) is written before the response returns
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Daniel5569/revenue-ops-agent-workflow&root-directory=apps/web)
+
+![Dashboard — proposal queue, detail panel, and audit trail](docs/screenshot.png)
+
 ---
 
 ## Quick Start
@@ -265,3 +269,11 @@ Copy `.env.example` to `.env` for local development. The `.env` file is gitignor
 ## Why This Project Matters
 
 Revenue operations teams at B2B SaaS companies lose pipeline to two failure modes: slow reaction to high-intent signals, and accidental destructive CRM writes — overwritten owners, duplicate leads, premature stage moves — that corrupt forecasts and erode rep trust in the system. Most automation tools address one or the other. This system treats CRM automation as a control problem: every proposed action is scored, classified by risk, and either executed automatically or held for human review, with every state transition logged before it is acknowledged. The architecture maps directly to what a production RevOps platform requires — an idempotent intake layer, a stateless policy engine that can be tested without infrastructure, and an approval queue where the human decision is the authoritative event, not an afterthought.
+
+**What this demonstrates technically:**
+
+- **Idempotent intake design** — SHA-256 content-addressed keys computed from the canonical event body; duplicate webhooks are safe to replay at any volume without double-processing or external coordination state
+- **Policy engine architecture separable from transport** — the three-tier classifier (`auto_safe` / `requires_approval` / `blocked`) runs in the worker layer with no API override path; the same logic is implemented independently in both Node.js and Python, making it verifiable in complete isolation from the HTTP stack
+- **Approval-queue patterns** — proposals are first-class persistent entities, not ephemeral side effects; every approval and rejection is an event appended to the audit log, not a field update on an existing row
+- **Audit-first state transitions** — the audit record is written before the response is returned; there is no code path that completes a state change without the corresponding audit event being committed first
+- **Monorepo with mixed Node.js + Python stack** — npm workspaces (Next.js API gateway, shared JSON Schema contracts) alongside a standalone Python worker that shares the same event contracts and policy logic, with separate test suites for each layer verified independently in CI
