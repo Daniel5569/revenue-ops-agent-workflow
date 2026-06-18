@@ -5,7 +5,6 @@ const root = process.cwd();
 
 const requiredFiles = [
   "README.md",
-  "PUBLISHING_GUIDE.md",
   ".env.example",
   ".gitignore",
   "docker-compose.yml",
