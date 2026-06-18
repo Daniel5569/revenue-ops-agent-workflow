@@ -319,3 +319,28 @@ Built by **[Daniel Ciafro](https://www.linkedin.com/in/daniel-ciafro--growth-str
 Open to **founding engineer and senior backend roles** at growth-stage B2B SaaS companies in the US.
 
 [LinkedIn](https://www.linkedin.com/in/daniel-ciafro--growth-strategy/) · [GitHub](https://github.com/Daniel5569)
+## Architecture Decisions FAQ
+
+**Q: Why a Python engine for risk scoring instead of doing it in the Node.js gateway?**
+
+The scoring rules are rule-based policy logic — three tiers, deterministic inputs, no async I/O. Python makes that easier to unit-test in isolation (pytest fixtures, no mocking Express middleware), and keeps the gateway a thin HTTP layer rather than mixing policy evaluation with request handling. The split also means the scoring engine can be swapped or versioned without touching the API surface.
+
+**Q: Why Redis Streams for proposal dispatch instead of a direct database poll?**
+
+At-least-once delivery with consumer groups means a worker crash does not lose the proposal — the message stays pending until explicitly acknowledged. A database poll would require a separate scheduler, heartbeat logic, and a `claimed_at` column to avoid duplicate processing. Redis Streams give that for free at the cost of one extra dependency.
+
+**Q: What happens if an approval webhook is never triggered — does the proposal expire?**
+
+In the current implementation proposals stay in `pending` indefinitely. A production deployment would add a TTL-based expiry job: proposals older than N hours move to `expired` and the original event is re-evaluated or discarded. The schema and audit trail support this; the cron was left out of the demo to keep the deploy surface minimal.
+
+**Q: Why SHA-256 content hashing on the event body instead of database-level deduplication?**
+
+Database uniqueness constraints protect against exact-duplicate rows but not semantically duplicate payloads with different timestamps or envelope metadata. Hashing the canonical event body catches those before they reach the worker and before any side effects occur. It also makes replay-safe testing trivial — repost the same fixture, see the same idempotency key, no duplicated proposals.
+
+**Q: Why three risk tiers instead of a binary approve/auto flag?**
+
+Two tiers would force every edge case into one bucket. `blocked` exists for actions that should never execute regardless of human approval — deleting owners, bulk overwrites above a threshold. Collapsing that into `requires_approval` would let a reviewer approve something the policy explicitly forbids. Three tiers map directly to three code paths, making the policy auditable line by line.
+
+**Q: Why write the audit event before the response returns?**
+
+If the audit write is deferred (fire-and-forget, background job), a crash between response and write produces a CRM change with no audit record — the worst-case compliance failure. Writing synchronously before returning means the audit trail is always at least as complete as the observable state. The latency cost is one extra write per request, which is acceptable for a control-plane API.
