@@ -14,6 +14,16 @@ A Next.js API gateway accepts CRM-style webhooks, a deterministic Python engine 
 
 ![Dashboard — proposal queue, detail panel, and audit trail](docs/screenshot.png)
 
+## Business Problem
+
+CRM data corruption from accidental writes — overwritten owners, premature stage moves, duplicate lead merges — costs revenue teams hours of cleanup per week and breaks forecast integrity at the worst possible time (pipeline reviews, renewal cycles, board prep).
+
+At the same time, high-intent signals (VP-level contact from a target account, multi-product engagement spike) sit unacted on for hours because no automation is trusted to take action autonomously on the CRM.
+
+This system solves both sides: every proposed action is classified by risk tier before execution, auto-safe actions run immediately, anything destructive waits for a human decision, and every state transition is logged before it is acknowledged. The AI proposes; a human approves; the audit trail is immutable.
+
+**To plug in a real LLM:** the Python worker's scorer and classifier are pure functions in `services/worker/scorer.py`. Replace the deterministic logic with an OpenAI or Anthropic call and the rest of the pipeline — idempotency, policy enforcement, audit log — stays unchanged.
+
 ---
 
 ## Quick Start
